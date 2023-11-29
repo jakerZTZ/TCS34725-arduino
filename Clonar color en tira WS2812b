@@ -1,0 +1,84 @@
+#include <Wire.h>
+#include "Adafruit_TCS34725.h"
+#include "FastLED.h"
+FASTLED_USING_NAMESPACE
+
+
+#define DATA_PIN    6
+
+#define LED_TYPE    WS2812
+
+#define COLOR_ORDER GRB
+
+#define BRIGHTNESS    250
+
+#define FRAMES_PER_SECOND 250
+
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_1X);
+
+const unsigned long INTERVAL = 2000;
+const int NUM_LEDS = 16;
+CRGB leds[NUM_LEDS];
+
+byte gammatable[256];
+
+float r, g, b;
+
+void setup()
+{
+  Serial.begin(9600);
+
+  if (!tcs.begin())
+  {
+    Serial.println("Error al iniciar TCS34725");
+    while (1) delay(1000);
+  }
+  
+  delay(1000);
+  FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS);
+  for (int i=0; i<256; i++)
+  {
+      float x = i;
+      x /= 255;
+      x = pow(x, 2.5);
+      x *= 255;
+      gammatable[i] = x;  
+  }
+}
+
+void loop()
+{
+  readColor();
+  calculateLeds(); 
+  FastLED.show();
+  FastLED.delay(1000 / FRAMES_PER_SECOND);
+}
+
+void readColor()
+{
+  uint16_t clear, red, green, blue;
+
+  tcs.setInterrupt(false);
+  delay(60);
+  tcs.getRawData(&red, &green, &blue, &clear);
+  tcs.setInterrupt(true);
+
+  uint32_t sum = clear;
+  r = red; r /= sum;
+  g = green; g /= sum;
+  b = blue; b /= sum;
+
+  r *= 256;
+  g *= 256;
+  b *= 256;
+}
+
+void calculateLeds()
+{
+  fadeToBlackBy(leds, NUM_LEDS, 20);
+
+  uint8_t pixel;
+  unsigned long tCurrent = millis();
+  pixel = (tCurrent % INTERVAL) * NUM_LEDS / INTERVAL;
+  leds[pixel] = CRGB(gammatable[(int)r], gammatable[(int)g], gammatable[(int)b]);
+}
